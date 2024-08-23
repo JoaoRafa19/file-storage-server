@@ -1,0 +1,10 @@
+version: 'latest'
+
+services:
+    core:
+        container_name: core
+        ports:
+            - 9000:9000
+        build: . 
+        volumes:
+            - .:/app
