@@ -24,3 +24,8 @@ down:
 
 test:
 	go test ./...
+
+
+.PHONY: local
+local:
+	go run main.go
