@@ -28,4 +28,4 @@ test:
 
 .PHONY: local
 local:
-	go run main.go
+	air
