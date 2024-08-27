@@ -23,7 +23,7 @@ down:
 .PHONY:test
 
 test:
-	go test -v ./...
+	@go test -coverprofile cover.out ./...
 
 
 .PHONY: local

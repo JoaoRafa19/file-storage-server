@@ -84,6 +84,10 @@ func NewStore(opts StoreOpts) *Store {
 	}
 }
 
+func (s *Store) Clear() error {
+	return os.RemoveAll(s.Root)
+}
+
 func (s *Store) Read(key string) (io.Reader, error) {
 	f, err := s.readStream(key)
 	if err != nil {
@@ -100,13 +104,12 @@ func (s *Store) Read(key string) (io.Reader, error) {
 
 func (s *Store) Has(Key string) bool {
 	pathKey := s.PathTransformFunc(Key)
-	
+
 	fullPathWithRoot := fmt.Sprintf("%s%c%s", s.Root, os.PathSeparator, pathKey.FullPath())
-	
 
 	_, err := os.Stat(fullPathWithRoot)
 
-	return errors.Is(err, fs.ErrNotExist)
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 func (s *Store) readStream(key string) (io.ReadCloser, error) {

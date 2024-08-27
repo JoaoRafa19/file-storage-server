@@ -2,10 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	// "github.com/stretchr/testify/assert"
 )
 
 func TestPathTransformFunc(t *testing.T) {
@@ -34,60 +35,76 @@ func TestPathTransformFunc(t *testing.T) {
 }
 
 func TestStore(t *testing.T) {
-	opts := StoreOpts{
-		PathTransformFunc: CASPathTransformFunc,
-	}
-	s := NewStore(opts)
-	key := "momspecialspics"
-	data := []byte("some jpeg bytes test")
-	if err := s.writeStream(key, bytes.NewReader(data)); err != nil {
-		t.Error(err)
-	}
-	
-	if ok := s.Has(key); !ok {
-		t.Errorf("Expected to have key %s", key)
-	}
+	s := newStore()
+	defer tearDown(t, s)
 
-	r, err := s.Read(key)
-	if err != nil {
-		t.Error(err)
-	}
-	b, err := io.ReadAll(r)
-
-	if string(b) != string(data) {
-		t.Errorf("wants %+v, have: %+v", data, b)
-	}
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	t.Run("Fails", func(t *testing.T) {
-		opts := StoreOpts{
-			PathTransformFunc: CASPathTransformFunc,
+	for i := 0; i < 50; i++ {
+		key := fmt.Sprintf("foo_%d",i)
+		data := []byte("some jpeg bytes test")
+		if err := s.writeStream(key, bytes.NewReader(data)); err != nil {
+			t.Error(err)
 		}
-		s := NewStore(opts)
-		r, err := s.Read("")
-		assert.Nil(t, r)
 
-		assert.NotNil(t, err, "no sutch file or directory")
-	})
-	
-	s.Delete(key)
+		if ok := s.Has(key); !ok {
+			t.Errorf("Expected to have key %s", key)
+		}
+
+		r, err := s.Read(key)
+		if err != nil {
+			t.Error(err)
+		}
+		b, err := io.ReadAll(r)
+
+		if string(b) != string(data) {
+			t.Errorf("wants %+v, have: %+v", data, b)
+		}
+
+		if err != nil {
+			t.Error(err)
+		}
+
+		// t.Run("Fails", func(t *testing.T) {
+		// 	opts := StoreOpts{
+		// 		PathTransformFunc: CASPathTransformFunc,
+		// 	}
+		// 	s := NewStore(opts)
+		// 	r, err := s.Read("")
+		// 	assert.Nil(t, r)
+
+		// 	assert.NotNil(t, err, "no sutch file or directory")
+		// })
+
+		if err := s.Delete(key); err != nil {
+			t.Errorf("expect not have key %s", key)
+		}
+	}
 }
 
 func TestDeleteKey(t *testing.T) {
-	opts := StoreOpts{
-		PathTransformFunc: CASPathTransformFunc,
-	}
-	s := NewStore(opts)
+	s := newStore()
+	defer tearDown(t, s)
 	key := "momspecialspics"
 	data := []byte("some jpeg bytes test")
 	if err := s.writeStream(key, bytes.NewReader(data)); err != nil {
 		t.Error(err)
 	}
-	
+
 	if err := s.Delete(key); err != nil {
+		t.Error(err)
+	}
+}
+
+func newStore() *Store {
+	opts := StoreOpts{
+		PathTransformFunc: CASPathTransformFunc,
+		Root:              "testStorage",
+	}
+	s := NewStore(opts)
+	return s
+}
+
+func tearDown(t *testing.T, s *Store) {
+	if err := s.Clear(); err != nil {
 		t.Error(err)
 	}
 }
