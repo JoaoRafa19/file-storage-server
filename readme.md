@@ -18,7 +18,7 @@ go test -coverprofile cover.out && go tool cover -html=cover.out
 - TCP Error
 
 Originaly the TCP Transport handle the decode error by continue looping
-after a error but we can type assert the error.
+after a error but we can type assert the error.
 
 by `var.(type)`
 
@@ -51,4 +51,4 @@ Simplified
 ```go 
 _, err := os.Stat(Patkey.FullPath())
 return errors.Is(err, fs.ErrNotExist)
-```
+```
