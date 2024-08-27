@@ -1,9 +1,10 @@
 package p2p
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net"
-	"sync"
 )
 
 // TCPPer represents the remote node over a TCP conections
@@ -26,8 +27,13 @@ type TCPTransportOpts struct {
 type TCPTransport struct {
 	TCPTransportOpts
 	listener net.Listener
-	mu       sync.Mutex
-	rpcChan  chan RPC
+	// mu       sync.Mutex
+	rpcChan chan RPC
+}
+
+// Close implements the transport interface.
+func (t *TCPTransport) Close() error {
+	return t.listener.Close()
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
@@ -58,8 +64,9 @@ func (t *TCPTransport) ListenAndAccept() error {
 	if err != nil {
 		return err
 	}
-	go t.startAcceptLoop()
 
+	go t.startAcceptLoop()
+	log.Println("TCP Transport listen on port:", t.ListenAddrs)
 	return nil
 }
 
@@ -67,12 +74,30 @@ func (t *TCPTransport) startAcceptLoop() {
 	for {
 
 		conn, err := t.listener.Accept()
+		if errors.Is(err, net.ErrClosed) {
+			return
+		}
 		if err != nil {
 			fmt.Printf("TCP accept error: %s\n", err)
 		}
 
-		go t.handleConn(conn)
+		go t.handleConn(conn, false)
 	}
+}
+
+// Dial implements the Transport interface.
+func (t *TCPTransport) Dial(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil
+	}
+
+	fmt.Println(conn)
+
+	go t.handleConn(conn, true)
+
+	return nil
+
 }
 
 // Close implements the Peer interface
@@ -80,9 +105,9 @@ func (p *TCPPeer) Close() error {
 	return p.conn.Close()
 }
 
-func (t *TCPTransport) handleConn(conn net.Conn) {
+func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
-	peer := NewTCPPeer(conn, true)
+	peer := NewTCPPeer(conn, outbound)
 
 	defer func() {
 		fmt.Printf("Drop peer connection: %v", err)
@@ -104,14 +129,14 @@ func (t *TCPTransport) handleConn(conn net.Conn) {
 	for {
 
 		err := t.Decoder.Decode(conn, &rpc)
-		
+
 		if err != nil {
-			t,isOpError := err.(*net.OpError)
+			t, isOpError := err.(*net.OpError)
 			if isOpError {
 				fmt.Println(t)
 				return
 			}
-		
+
 			fmt.Printf("TCP ERROR: %s\n", err)
 			continue
 		}

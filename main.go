@@ -1,38 +1,39 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/JoaoRafa19/file-storage-server/p2p"
 )
 
-func OnPeer(peer p2p.Peer) error {
-
-	fmt.Println("Doing som logic outside the TCP transport")
-	return nil
-}
-
 func main() {
-	tcpOpts := p2p.TCPTransportOpts{
+	tcpTransportOpts := p2p.TCPTransportOpts{
 		ListenAddrs:   ":9000",
-		Decoder:       p2p.DefaultDecoder{},
 		HandShakeFunc: p2p.NOPHandshakeFunc,
-		OnPeer:        OnPeer,
+		Decoder:       p2p.DefaultDecoder{},
+
+		OnPeer: func(p2p.Peer) error {
+			return nil
+		},
 	}
-	tr := p2p.NewTCPTransport(tcpOpts)
+	tcpTransport := p2p.NewTCPTransport(tcpTransportOpts)
+	fileServerOpts := FileServerOpts{
+		StorageRoot:       "9000_network",
+		Transport:         tcpTransport,
+		PathTransformFunc: CASPathTransformFunc,
+		BootstapNodes: []string{
+			":4000",
+		},
+	}
+	s := NewFileServer(fileServerOpts)
 
-	log.Println("Running at 9000 !!!!")
+	// go func() {
+	// 	time.Sleep(time.Second * 3)
+	// 	s.Stop()
+	// }()
 
-	go func() {
-		for {
-			msg := <-tr.Consume()
-			fmt.Printf("%+v\n", msg)
-		}
-	}()
-	if err := tr.ListenAndAccept(); err != nil {
+	if err := s.Start(); err != nil {
 		log.Fatal(err)
 	}
 
-	select {}
 }

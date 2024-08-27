@@ -127,6 +127,10 @@ func (s *Store) Delete(key string) error {
 	return os.RemoveAll(firstPathNameWithRoot)
 }
 
+func (s*Store ) Write(key string, r io.Reader) error {
+	return s.writeStream(key, r)
+}
+
 func (s *Store) writeStream(key string, r io.Reader) error {
 	pathKey := s.PathTransformFunc(key)
 	pathWithRoot := fmt.Sprintf("%s%c%s", s.Root, os.PathSeparator, pathKey.PathName)
