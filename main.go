@@ -6,34 +6,35 @@ import (
 	"github.com/JoaoRafa19/file-storage-server/p2p"
 )
 
-func main() {
+func makeServer(listenAddr string, nodes ...string) *FileServer {
 	tcpTransportOpts := p2p.TCPTransportOpts{
-		ListenAddrs:   ":9000",
+		ListenAddrs:   listenAddr,
 		HandShakeFunc: p2p.NOPHandshakeFunc,
 		Decoder:       p2p.DefaultDecoder{},
-
-		OnPeer: func(p2p.Peer) error {
-			return nil
-		},
 	}
 	tcpTransport := p2p.NewTCPTransport(tcpTransportOpts)
 	fileServerOpts := FileServerOpts{
-		StorageRoot:       "9000_network",
+		StorageRoot:       listenAddr + "_network",
 		Transport:         tcpTransport,
 		PathTransformFunc: CASPathTransformFunc,
-		BootstapNodes: []string{
-			":4000",
-		},
+		BootstapNodes:     nodes,
 	}
+
 	s := NewFileServer(fileServerOpts)
+	tcpTransport.OnPeer = s.OnPeer
 
-	// go func() {
-	// 	time.Sleep(time.Second * 3)
-	// 	s.Stop()
-	// }()
+	return s
 
-	if err := s.Start(); err != nil {
-		log.Fatal(err)
-	}
+}
+
+func main() {
+	s1 := makeServer(":3030", "")
+	s2 := makeServer(":", ":3030")
+
+	go func() {
+		log.Fatal(s1.Start())
+	}()
+
+	s2.Start()
 
 }
