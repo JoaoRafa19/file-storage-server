@@ -1,20 +1,24 @@
-package p2p
+ package p2p
 
 import (
 	"errors"
 	"fmt"
 	"log"
 	"net"
+	"sync"
 )
 
 // TCPPer represents the remote node over a TCP conections
 type TCPPeer struct {
-	// conn is the connection of the Peer
-	conn net.Conn
+	// underlying connection of the peer 
+	// TCP Connection
+	net.Conn
 
 	// if we dial a connection => outbound = true
 	// if accept and retrieve a conn => outbound = false
 	outbound bool
+
+	Wg *sync.WaitGroup
 }
 
 type TCPTransportOpts struct {
@@ -37,15 +41,17 @@ func (t *TCPTransport) Close() error {
 }
 
 func (t *TCPPeer) Send(b []byte) error{
-	_, err := t.conn.Write(b)
+	_, err := t.Conn.Write(b)
 
 	return err
 }
 
+
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	return &TCPPeer{
-		conn:     conn,
+		Conn:     conn,
 		outbound: outbound,
+		Wg: &sync.WaitGroup{}  ,
 	}
 }
 
@@ -103,16 +109,7 @@ func (t *TCPTransport) Dial(addr string) error {
 	return nil
 
 }
-// RemoteAddr implements the Peer interface and return remote address
-// of its underlying connection.
-func (t *TCPPeer) RemoteAddr() net.Addr {
-	return t.conn.RemoteAddr()
-}
 
-// Close implements the Peer interface
-func (p *TCPPeer) Close() error {
-	return p.conn.Close()
-}
 
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
@@ -126,7 +123,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	if err := t.HandShakeFunc(peer); err != nil {
 		return
 	}
-
+ 
 	if t.OnPeer != nil {
 		if err = t.OnPeer(peer); err != nil {
 			return
@@ -152,7 +149,11 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			continue
 		}
 
-		rpc.From = conn.RemoteAddr()
+		rpc.From = conn.RemoteAddr().String()
+		peer.Wg.Add(1 )
+		fmt.Println("waiting till stream is done")
 		t.rpcChan <- rpc
+		peer.Wg.Wait()
+		fmt.Println("Stream done continuing normal read loop" )
 	}
 }

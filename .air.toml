@@ -3,14 +3,15 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = []
-  bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main ."
+  args_bin = ["server"]
+  bin = "./tmp/fss-debug"
+  full_bin = "dlv exec ./tmp/fss-debug --listen :2345 --headless=true --api-version=2 --accept-multiclient --continue -- "
+  cmd = "make build-debug"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata"]
+  exclude_dir = [ "storage", ".vscode", ".github", "bin", "assets", "tmp", "vendor", "testdata", ":_network"]
   exclude_file = []
   exclude_regex = ["_test.go"]
-  exclude_unchanged = false
+  exclude_unchanged = true
   follow_symlink = false
   full_bin = ""
   include_dir = []
@@ -39,7 +40,8 @@ tmp_dir = "tmp"
   time = false
 
 [misc]
-  clean_on_exit = false
+  clean_on_exit = true
+
 
 [proxy]
   app_port = 0
@@ -47,5 +49,5 @@ tmp_dir = "tmp"
   proxy_port = 0
 
 [screen]
-  clear_on_rebuild = false
+  clear_on_rebuild = true
   keep_scroll = true

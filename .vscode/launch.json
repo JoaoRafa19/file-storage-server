@@ -6,11 +6,11 @@
     "configurations": [
         {
             "name": "Launch",
-          
+            
             "request": "launch",
             "type": "go",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}"
+            "mode": "debug",
+           "program": "${workspaceFolder}"
             //"debugServer": 9000
         }
     ]

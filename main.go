@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"log"
+	"time"
 
 	"github.com/JoaoRafa19/file-storage-server/p2p"
 )
@@ -14,7 +16,7 @@ func makeServer(listenAddr string, nodes ...string) *FileServer {
 	}
 	tcpTransport := p2p.NewTCPTransport(tcpTransportOpts)
 	fileServerOpts := FileServerOpts{
-		StorageRoot:       listenAddr + "_network",
+		StorageRoot:       "storage",
 		Transport:         tcpTransport,
 		PathTransformFunc: CASPathTransformFunc,
 		BootstapNodes:     nodes,
@@ -28,13 +30,19 @@ func makeServer(listenAddr string, nodes ...string) *FileServer {
 }
 
 func main() {
-	s1 := makeServer(":3030", "")
-	s2 := makeServer(":", ":3030")
+	s1 := makeServer(":3000", "")
+	s2 := makeServer(":4000", ":3000")
 
 	go func() {
 		log.Fatal(s1.Start())
 	}()
 
-	s2.Start()
+	time.Sleep(time.Second * 4)
+	go s2.Start()
+	time.Sleep(time.Second * 4)
 
+	data := bytes.NewReader([]byte("big data here"))
+	s2.StoreData("myprivatedata", data)
+
+	select {}
 }
