@@ -22,30 +22,9 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	}
 }
 
-type TCPOpts func(*TCPTransport)
-
-func WithListenAddr(addr string) TCPOpts {
-	return func(t *TCPTransport) {
-		t.listenAddr = addr
-	}
-}
-
-func WithListener(listener net.Listener) TCPOpts {
-	return func(t *TCPTransport) {
-		t.listener = listener
-	}
-}
-
-func WithShakeHands(shf HandshakeFunc) TCPOpts {
-	return func(t *TCPTransport) {
-		t.shakeHands = shf
-	}
-}
-
-func WithDecoder(dec Decoder) TCPOpts {
-	return func(t *TCPTransport) {
-		t.decoder = dec
-	}
+// close implements the Peer interface
+func (p *TCPPeer) Close() error {
+	return p.conn.Close()
 }
 
 type TCPTransport struct {
@@ -53,19 +32,28 @@ type TCPTransport struct {
 	listener   net.Listener
 	shakeHands HandshakeFunc
 	decoder    Decoder
+	rpcch      chan RPC
+	onPeer     func(Peer) error
 
-	mu    sync.RWMutex // Mutex above the thing you want to protect
-	peers map[net.Addr]Peer
+	mu sync.RWMutex // Mutex above the thing you want to protect
 }
 
 func NewTCPTransport(opts ...TCPOpts) *TCPTransport { //Return the struct instead of the interface for testing purposes
-	transport := &TCPTransport{}
+	transport := &TCPTransport{
+		rpcch: make(chan RPC),
+	}
 
 	for _, opt := range opts {
 		opt(transport)
 	}
 
 	return transport
+}
+
+// Consume implements the Transport Interface, which will return read-only channel
+// for reading incomming messages received form another peer in the network
+func (t *TCPTransport) Consume() <-chan RPC {
+	return t.rpcch
 }
 
 func (tr *TCPTransport) ListenAndAccept() error {
@@ -87,31 +75,41 @@ func (tr *TCPTransport) strartAcceptLoop() {
 			fmt.Println("TCP accept error: ", err.Error())
 		}
 
-		fmt.Println("new incomming connection %+v", conn)
+		fmt.Printf("new incomming connection %+v\n", conn)
 
 		go tr.handleConn(conn)
 	}
 }
 
 func (t *TCPTransport) handleConn(conn net.Conn) {
-	peer := NewTCPPeer(conn, true)
-
-	if err := t.shakeHands(peer); err != nil {
+	var err error
+	defer func() {
+		fmt.Printf("Droping peer connection: %s\n", err)
 		conn.Close()
-		fmt.Printf("TCP handshake error: %s\n", err)
+	}()
+
+	peer := NewTCPPeer(conn, true)
+	if err := t.shakeHands(peer); err != nil {
 		return
 	}
 
-	msg := &Message{}
+	if t.onPeer != nil {
+		if err = t.onPeer(peer); err != nil {
+			return
+		}
+	}
+
+	rpc := RPC{}
 	//Read Loop
 	for {
-		if err := t.decoder.Decode(conn, msg); err != nil {
+		if err := t.decoder.Decode(conn, &rpc); err != nil {
 			fmt.Printf("TCP error: %s\n", err)
 			continue
 		}
-		msg.From = conn.RemoteAddr()
+		rpc.From = conn.RemoteAddr()
+		t.rpcch <- rpc
 
-		fmt.Printf("message %+v\n", msg)
+		fmt.Printf("%+v\n", rpc)
 	}
 
 }
