@@ -1,30 +1,33 @@
 package p2p
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"sync"
 )
 
 // TCPPeer represents the remote node over a TCP established connection
 type TCPPeer struct {
-	// the underlying connection of the peer
-	conn net.Conn
+	// the underlying connection of the peer. Which in this case is a TCP connection
+	net.Conn
 	//if dial and accept a connection => outbound == true
 	// if accpet and retrieve a connection => outbound == false
 	outbound bool
 }
 
-func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
-	return &TCPPeer{
-		conn:     conn,
-		outbound: outbound,
-	}
+func (p *TCPPeer) Send(b []byte) error {
+	_, err := p.Conn.Write(b)
+	return err
 }
 
-// close implements the Peer interface
-func (p *TCPPeer) Close() error {
-	return p.conn.Close()
+func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
+	return &TCPPeer{
+		Conn:     conn,
+		outbound: outbound,
+	}
 }
 
 type TCPTransport struct {
@@ -33,21 +36,22 @@ type TCPTransport struct {
 	shakeHands HandshakeFunc
 	decoder    Decoder
 	rpcch      chan RPC
-	onPeer     func(Peer) error
+	OnPeer     func(Peer) error
 
 	mu sync.RWMutex // Mutex above the thing you want to protect
 }
 
-func NewTCPTransport(opts ...TCPOpts) *TCPTransport { //Return the struct instead of the interface for testing purposes
-	transport := &TCPTransport{
-		rpcch: make(chan RPC),
+// Dial implements [Transport].
+func (t *TCPTransport) Dial(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
 	}
 
-	for _, opt := range opts {
-		opt(transport)
-	}
+	// handle conn
+	t.handleConn(conn, true)
 
-	return transport
+	return nil
 }
 
 // Consume implements the Transport Interface, which will return read-only channel
@@ -58,30 +62,44 @@ func (t *TCPTransport) Consume() <-chan RPC {
 
 func (tr *TCPTransport) ListenAndAccept() error {
 	var err error
+	fmt.Println("Starting tcp transport")
 	tr.listener, err = net.Listen("tcp", tr.listenAddr)
 	if err != nil {
+		fmt.Println("error on start tcp connection")
 		return err
 	}
 
 	go tr.strartAcceptLoop()
 
+	log.Printf("TCP transport listen in port %s/n", tr.listenAddr)
+
 	return err
+}
+
+// Close implements [Transport] interface
+func (t *TCPTransport) Close() error {
+	return t.listener.Close()
 }
 
 func (tr *TCPTransport) strartAcceptLoop() {
 	for {
 		conn, err := tr.listener.Accept()
+		if errors.Is(err, net.ErrClosed) {
+			return
+		}
 		if err != nil {
 			fmt.Println("TCP accept error: ", err.Error())
 		}
 
-		fmt.Printf("new incomming connection %+v\n", conn)
-
-		go tr.handleConn(conn)
+		go tr.handleConn(conn, false)
 	}
 }
 
-func (t *TCPTransport) handleConn(conn net.Conn) {
+func (t *TCPTransport) ListenAddr() string {
+	return t.listenAddr
+}
+
+func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 	defer func() {
 		fmt.Printf("Droping peer connection: %s\n", err)
@@ -93,8 +111,8 @@ func (t *TCPTransport) handleConn(conn net.Conn) {
 		return
 	}
 
-	if t.onPeer != nil {
-		if err = t.onPeer(peer); err != nil {
+	if t.OnPeer != nil {
+		if err = t.OnPeer(peer); err != nil {
 			return
 		}
 	}
@@ -103,7 +121,7 @@ func (t *TCPTransport) handleConn(conn net.Conn) {
 	//Read Loop
 	for {
 		err := t.decoder.Decode(conn, &rpc)
-		if err == net.ErrClosed {
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 			return
 		}
 
@@ -118,4 +136,27 @@ func (t *TCPTransport) handleConn(conn net.Conn) {
 		fmt.Printf("%+v\n", rpc)
 	}
 
+}
+
+// NewTCPTransport creates a TCPTransport configured with the given options.
+//
+// Available options:
+//   - WithListenAddr(string): address the transport listens on
+//   - WithListener(net.Listener): use a pre-existing listener
+//   - WithShakeHands(HandshakeFunc): handshake performed on new connections
+//   - WithDecoder(Decoder): decoder used to read incoming RPC messages
+//   - WithOnPeer(func(Peer) error): callback invoked when a peer connects
+//
+// It returns the concrete *TCPTransport (rather than an interface) to make
+// testing easier.
+func NewTCPTransport(opts ...TCPOpts) Transport {
+	transport := &TCPTransport{
+		rpcch: make(chan RPC),
+	}
+
+	for _, opt := range opts {
+		opt(transport)
+	}
+
+	return transport
 }

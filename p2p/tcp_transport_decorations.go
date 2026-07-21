@@ -30,6 +30,6 @@ func WithDecoder(dec Decoder) TCPOpts {
 
 func WithOnPeer(onpeer func(Peer) error) TCPOpts {
 	return func(t *TCPTransport) {
-		t.onPeer = onpeer
+		t.OnPeer = onpeer
 	}
 }

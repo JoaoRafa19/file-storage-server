@@ -142,7 +142,7 @@ func (s *Store) readStream(key string) (io.ReadCloser, error) {
 	return os.Open(pathKeyWithRoot)
 }
 
-func (s *Store) Write(key string, r io.Reader) error {
+func (s *Store) Write(key string, r io.Reader) error { // Expose now but it will have more shit in it
 	return s.writeStream(key, r)
 }
 
